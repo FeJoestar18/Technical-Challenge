@@ -3,3 +3,6 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+
+Technical-Challenge.WebAPI/.env
+Technical-Challenge.WebAPI/appsettings.json
