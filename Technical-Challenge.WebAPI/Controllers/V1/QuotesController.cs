@@ -5,6 +5,8 @@ using Technical_Challenge.Domain.Entities;
 namespace Technical_Challenge.WebAPI.Controllers;
 
 [ApiController]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/quotes")]
 [Route("api/quotes")]
 public class QuotesController : ControllerBase
 {

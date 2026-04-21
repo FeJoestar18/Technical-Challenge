@@ -1,4 +1,9 @@
 using System;
+using System.Linq;
+using System.Reflection;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
+using Microsoft.AspNetCore.Mvc.Versioning;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +23,23 @@ public static class ServiceCollectionExtensions
     {
         services.AddControllers();
         services.AddEndpointsApiExplorer();
+
+        services.AddApiVersioning(options =>
+        {
+            options.AssumeDefaultVersionWhenUnspecified = true;
+            options.DefaultApiVersion = new ApiVersion(1, 0);
+            options.ReportApiVersions = true;
+            options.ApiVersionReader = ApiVersionReader.Combine(
+                new UrlSegmentApiVersionReader());
+        });
+
+        services.AddVersionedApiExplorer(options =>
+        {
+            options.GroupNameFormat = "'v'VVV";
+            options.SubstituteApiVersionInUrl = true;
+            options.AssumeDefaultVersionWhenUnspecified = true;
+        });
+
         services.AddSwaggerGen(c =>
         {
             c.SwaggerDoc("v1", new() { Title = "Currency Quotes API", Version = "v1" });
@@ -27,6 +49,21 @@ public static class ServiceCollectionExtensions
             {
                 c.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
             }
+
+            c.DocInclusionPredicate((docName, apiDesc) =>
+            {
+                var versions = apiDesc.ActionDescriptor.EndpointMetadata
+                    .OfType<ApiVersionAttribute>()
+                    .SelectMany(attr => attr.Versions)
+                    .ToList();
+
+                if (!versions.Any())
+                {
+                    return true;
+                }
+
+                return versions.Any(v => $"v{v.MajorVersion}" == docName);
+            });
         });
 
         services.AddCors(options =>
