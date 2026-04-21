@@ -8,6 +8,54 @@ Sistema de coleta (RPA) e consulta (API) de cotações de moedas. O Worker em ba
 
 ---
 
+# Como Rodar o Projeto (Guia Rápido)
+
+Esta seção é dedicada inteiramente para você rodar a stack completa do projeto com apenas alguns comandos usando **Docker Compose**.
+
+**Pré-requisitos obrigatórios:**
+- Docker instalado (e rodando)
+- Docker Compose
+- Git
+
+### 1. Clonar o Repositório
+```bash
+git clone https://github.com/FeJoestar18/Technical-Challenge.git
+
+cd Technical-Challenge
+```
+
+### 2. Subir os Containers (API + Banco + pgAdmin)
+Este comando fará o build da imagem .NET (via multi-stage Dockerfile), inicializará o banco de dados e rodará as migrações automaticamente no startup.
+
+```bash
+docker compose up --build -d
+```
+
+### 3. Acessos Disponíveis
+Após os containers subirem e o healthcheck do banco (`pg_isready`) liberar a API, os seguintes acessos estarão disponíveis:
+
+-  **Documentação da API (Swagger):** [http://localhost:8080/swagger](http://localhost:8080/swagger)
+
+-  **Painel do Banco de Dados (pgAdmin):** [http://localhost:5050](http://localhost:5050)
+  - **Email:** `admin@admin.com`
+  - **Senha:** `admin123`
+
+### 4. Comandos Administrativos (Opcionais)
+Caso você precise visualizar logs, desligar o ambiente ou limpar os dados para começar do zero:
+
+```bash
+# Visualizar logs da API e do Worker (RPA) rodando em background
+docker compose logs -f api
+
+# Parar todos os serviços
+docker compose down
+
+# Parar serviços e DESTRUIR o volume de dados (exclui todo o histórico do banco)
+docker compose down -v
+```
+
+---
+
 # System Design
 
 ```mermaid
@@ -177,16 +225,19 @@ O projeto não utiliza uma separação física por pastas entre "RPA" e "API" (c
 - **Indexes criados:** Cria os índices reais `idx_quotes_currency` para performance de consultas baseadas em moeda e `idx_quotes_captured_at` de forma descendente para ordenação de histórico.
 
 ### Web API e Controllers
-- **Configuração da API:** O projeto ASP.NET possui middleware do Swagger para documentação e habilita o CORS permitindo qualquer origem/método.
+- **Configuração da API e Versionamento:** O projeto ASP.NET possui suporte a versionamento de API configurado no `ServiceCollectionExtensions.cs` (`AddApiVersioning`). Ele suporta tanto a rota default (`/api/quotes`) quanto a rota explícita de versão (`/api/v1/quotes`). O Swagger está configurado para exibir essa documentação, e o CORS permite qualquer origem/método.
 - **Porta:** Exposta para rede hospedeira no Docker pela porta `8080`.
-- **Tabela de Endpoints (`QuotesController`):**
+- **Tabela de Endpoints:**
 
-| Método | Rota | Descrição | Query params | Retorno |
-|--------|------|-----------|--------------|---------|
-| GET | `/api/quotes` | Lista todas as cotações com paginação | `page`, `pageSize` | `200 OK` (`IEnumerable`) |
-| GET | `/api/quotes/latest` | Última cotação de cada moeda | - | `200 OK` (`IEnumerable`) |
-| GET | `/api/quotes/{currency}`| Histórico de uma moeda específica | - | `200 OK` (`IEnumerable`) |
-| GET | `/api/quotes/range` | Cotações em um intervalo de datas | `from`, `to` | `200 OK` ou `400 BadRequest` |
+| Controller | Método | Rota | Descrição | Query params | Retorno |
+|------------|--------|------|-----------|--------------|---------|
+| **Quotes** | GET | `/api/v1/quotes` | Lista todas as cotações com paginação | `page`, `pageSize` | `200 OK` (`IEnumerable`) |
+| **Quotes** | GET | `/api/v1/quotes/latest` | Última cotação de cada moeda | - | `200 OK` (`IEnumerable`) |
+| **Quotes** | GET | `/api/v1/quotes/{currency}`| Histórico de uma moeda específica | - | `200 OK` (`IEnumerable`) |
+| **Quotes** | GET | `/api/v1/quotes/range` | Cotações em um intervalo de datas | `from`, `to` | `200 OK` ou `400 BadRequest` |
+| **Test** | GET | `/Test` | Endpoint simples de verificação de saúde | - | `200 OK` (`string`) |
+
+*(Nota: O controller `Quotes` também atende pela rota legada `/api/quotes` que assume a versão default 1.0)*
 
 ---
 
@@ -247,32 +298,6 @@ docker exec -it postgres_db psql -U postgres -d challenge
 - **Multi-stage build (Dockerfile):** Utiliza um padrão de múltiplas fases. A fase `build` possui ferramentas (SDK do .NET 8.0) para restaurar as dependências e compilar o código de todos os módulos de classe. A fase `runtime` (`aspnet:8.0`) pega apenas os binários finais gerados no publish. Isso garante que a imagem final possua menor tamanho de disco (reduz overhead) e remove vulnerabilidades e utilitários que não devem estar em produção.
 - **Volume pgdata:** Definido globalmente e atrelado ao `/var/lib/postgresql/data`. O PostgreSQL escreve as modificações nele. Esse mecanismo retém e resguarda os dados se o container morrer ou for removido.
 - **Healthcheck e Impacto no Startup:** O healthcheck atesta se o PostgreSQL aceita comandos (via `pg_isready`). Essa proteção de bloqueio impede que a Web API suba simultaneamente e falhe tentando criar conexões em um servidor de banco de dados inativo ou ainda em processo de warm-up.
-
----
-
-# Como Executar
-
-**Pré-requisitos:** Docker, Docker Compose, Git.
-
-```bash
-# Clone o repositório para o seu ambiente local
-git clone <url-do-repositorio>
-
-# Entre no diretório gerado
-cd Technical-Challenge
-
-# Suba a stack do Docker Compose em segundo plano (junto com o build inicial)
-docker compose up --build -d
-```
-
-**Acessos Úteis:**
-- **Acessar Swagger API:** `http://localhost:8080/swagger`
-- **Acessar pgAdmin:** `http://localhost:5050` (Email: `admin@admin.com` | Senha: `admin123`)
-
-**Comandos Administrativos:**
-- Como visualizar logs da API/Worker: `docker compose logs -f api`
-- Como parar todos os serviços: `docker compose down`
-- Como parar e também limpar as configurações e volume (exclui o banco): `docker compose down -v`
 
 ---
 
