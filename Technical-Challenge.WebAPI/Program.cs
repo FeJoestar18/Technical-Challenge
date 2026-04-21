@@ -1,5 +1,7 @@
 using DotNetEnv;
 using Microsoft.EntityFrameworkCore;
+using Polly;
+using Polly.Extensions.Http;
 using Technical_Challenge.Application;
 using Technical_Challenge.Application.Interfaces;
 using Technical_Challenge.Infrastructure.Persistence.Context;
@@ -35,8 +37,19 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<IQuoteRepository, QuoteRepository>();
 
-builder.Services.AddHttpClient<IScraperService, HttpScraperService>();
-builder.Services.AddScoped<IScraperService, HttpScraperService>();
+var retryPolicy = HttpPolicyExtensions
+    .HandleTransientHttpError()
+    .OrResult(r => r.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+    .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+
+var circuitBreakerPolicy = HttpPolicyExtensions
+    .HandleTransientHttpError()
+    .OrResult(r => r.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+    .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30));
+
+builder.Services.AddHttpClient<IScraperService, HttpScraperService>()
+    .AddPolicyHandler(retryPolicy)
+    .AddPolicyHandler(circuitBreakerPolicy);
 builder.Services.AddHostedService<Worker>();
 
 var app = builder.Build();

@@ -24,7 +24,11 @@ public class HttpScraperService : IScraperService
     public async Task<List<CurrencyQuote>> FetchQuotesAsync()
     {
         _logger.LogDebug("GET {Url}", _targetUrl);
-        var response = await _httpClient.GetStringAsync(_targetUrl);
+        
+        var httpResponse = await _httpClient.GetAsync(_targetUrl);
+        httpResponse.EnsureSuccessStatusCode();
+
+        var response = await httpResponse.Content.ReadAsStringAsync();
 
         var quotes = new List<CurrencyQuote>();
         using var doc = JsonDocument.Parse(response);
