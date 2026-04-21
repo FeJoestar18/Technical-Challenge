@@ -1,17 +1,6 @@
 ﻿services:
-  api:
-    build:
-      context: .
-      dockerfile: Technical-Challenge.WebAPI/Dockerfile
-    ports:
-      - "8080:80"
-    depends_on:
-      - db
-    env_file:
-      - .env
-
   db:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: postgres_db
     restart: always
     env_file:
@@ -20,6 +9,24 @@
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Technical-Challenge.WebAPI/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    restart: on-failure
 
   pgadmin:
     image: dpage/pgadmin4

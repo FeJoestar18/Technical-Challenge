@@ -4,6 +4,9 @@ obj/
 .git/
 .gitignore
 
+.env
+development.settings.json
+
 .vs/
 .vscode/
 .idea/
