@@ -52,3 +52,13 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Rider / IDE
+riderModule.iml
+/_ReSharper.Caches/
+
+# Local environment and secret files
+.env
+Technical-Challenge.WebAPI/.env
+Technical-Challenge.WebAPI/appsettings.json
+

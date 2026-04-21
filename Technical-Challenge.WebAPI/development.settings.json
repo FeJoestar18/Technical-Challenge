@@ -1,0 +1,9 @@
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=challenge;Username=postgres;Password=123456"
+  },
+  "Scraper": {
+    "IntervalMinutes": 1,
+    "TargetUrl": "https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL,BTC-BRL,EUR-USD"
+  }
+}
