@@ -28,11 +28,10 @@
       - .env
     restart: on-failure
 
-  worker:
+  rpa:
     build:
       context: .
-      dockerfile: Technical-Challenge.Application/Dockerfile
-    command: ["dotnet", "Technical-Challenge.WebAPI.dll", "--worker"]
+      dockerfile: Technical-Challenge.RPA/Dockerfile
     depends_on:
       db:
         condition: service_healthy

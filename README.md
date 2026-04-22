@@ -30,9 +30,11 @@ git clone https://github.com/FeJoestar18/Technical-Challenge.git
 cd Technical-Challenge
 ```
 
-### 2. Subir os Containers (API + Worker + Banco + pgAdmin)
+### 2. Subir os Containers (API + RPA + Banco + pgAdmin)
 
 Este comando fará o build das imagens .NET (via multi-stage Dockerfiles), inicializará o banco de dados e rodará as migrações automaticamente no startup.
+
+O comando `docker compose up --build -d` inicia todos os serviços definidos em `compose.yaml` de uma vez: `api`, `rpa`, `db` e `pgadmin`.
 
 ```bash
 docker compose up --build -d
@@ -54,8 +56,8 @@ Após os containers subirem e o healthcheck do banco (`pg_isready`) liberar a AP
 Caso você precise visualizar logs, desligar o ambiente ou limpar os dados para começar do zero:
 
 ```bash
-# Visualizar logs da API e do worker rodando em background
-docker compose logs -f api worker
+# Visualizar logs da API e do RPA rodando em background
+docker compose logs -f api rpa
 
 # Parar todos os serviços
 docker compose down
@@ -76,7 +78,7 @@ flowchart LR
     end
 
     subgraph Docker [Ambiente Docker]
-        subgraph WorkerContainer [Worker Container]
+        subgraph WorkerContainer [RPA Container]
             Worker["Background Worker<br>Scraping + Persistência"]
         end
 
@@ -95,20 +97,24 @@ flowchart LR
     WebAPI -- "SELECT (Dapper)" --> DB
 ```
 
-**Visão geral do fluxo:** O `Worker` coleta cotações de moedas da fonte externa e grava no PostgreSQL. A Web API expõe os dados persistidos em endpoints RESTful. Ambos consomem o mesmo banco de dados, mas são executados em containers distintos.
+**Visão geral do fluxo:**
 
-**Decisões de design:**
+- O container `rpa` coleta cotações externas e grava os dados no PostgreSQL.
+- O container `api` consome esse banco e expõe os resultados pela Web API.
+- O container `db` armazena o histórico de cotações usado por ambos.
 
-- O `Worker` e a `API` rodam em containers separados para garantir isolamento de responsabilidade e facilitar deploy independente.
-- O `Worker` reutiliza o mesmo conjunto de serviços e contratos da aplicação, mas é iniciado em modo `--worker` para executar apenas a coleta.
-- O PostgreSQL é isolado em container próprio com volume persistente `postgres_data`.
-- O `pgadmin` está presente apenas como ferramenta de inspeção e não faz parte do fluxo de produção.
+**Principais decisões:**
 
-**Resiliência e disponibilidade:**
+- `Technical-Challenge.RPA` e `Technical-Challenge.WebAPI` são hosts separados para manter isolamento de responsabilidade.
+- A camada `Application` é compartilhada entre os dois hosts, garantindo reutilização de regras de negócio.
+- O PostgreSQL roda em container próprio com volume persistente `postgres_data`.
+- `pgadmin` existe só como ferramenta de inspeção e não é parte do fluxo de negócios.
 
-- `docker compose` usa `depends_on` com healthcheck para garantir que `api` e `worker` iniciem somente após o banco estar pronto.
-- `HttpClientFactory` com Polly implementa retry exponencial e circuit breaker no scraping.
-- `restart: on-failure` no `api` e `worker`, e `restart: always` no `db`, permitem reinicialização automática em caso de falhas transitórias.
+**Resiliência:**
+
+- `docker compose` usa `depends_on` com healthcheck para aguardar o banco antes de iniciar `api` e `rpa`.
+- O scraping usa `HttpClientFactory` + Polly com retry exponencial e circuit breaker.
+- `restart: on-failure` em `api` e `rpa`, e `restart: always` em `db`, ajudam a recuperar de falhas transitórias.
 
 ---
 
@@ -116,35 +122,37 @@ flowchart LR
 
 **Padrão arquitetural adotado:** Clean Architecture / Layered Architecture.
 
-### Estrutura de dependências
+### Dependências do projeto
 
 ```mermaid
 flowchart LR
     WebAPI["WebAPI"]
+    RPA["RPA"]
     Infrastructure["Infrastructure"]
     Application["Application"]
     Domain["Domain"]
     Test["Technical-Challenge.Test"]
 
     WebAPI --> Application
+    RPA --> Application
     Infrastructure --> Application
     Application --> Domain
     Test --> WebAPI
 ```
 
 - `Domain`: regras de negócio e entidades puras (`CurrencyQuote`, `User`).
-- `Application`: contratos (`IQuoteRepository`, `IScraperService`), orquestração do `Worker` e casos de uso.
-- `Infrastructure`: implementação dos contratos, persistência (Dapper/EF Core), scraping HTTP e configuração de banco.
-- `WebAPI`: composição, endpoints, Swagger, DI e execução do host.
-- `Technical-Challenge.Test`: camada de testes que referencia exclusivamente o `WebAPI`, consumindo suas dependências transitivas para validar comportamento do `Worker`, do `HttpScraperService` e da configuração de DI.
+- `Application`: contratos e orquestração do fluxo de scraping, incluindo o `Worker`.
+- `Infrastructure`: implementa os contratos, lida com persistência, scraping HTTP e configuração de banco.
+- `WebAPI`: host HTTP, controllers, Swagger, DI e execução da API.
+- `RPA`: host separado que inicia o `Worker` e executa a coleta de forma autônoma.
+- `Technical-Challenge.Test`: projeto de testes que referencia `WebAPI` para validar os componentes e a configuração de DI.
 
-**Pontos chave:**
+### Pontos chave
 
-- A camada `Application` é independente de frameworks e expõe abstrações consumidas pela API e pelo Worker.
-- `Infrastructure` implementa essas abstrações e fornece suporte de persistência e integração externa.
-- O container `api` inicia a Web API em modo HTTP, enquanto o container `worker` reutiliza o mesmo host com `--worker` para executar apenas o serviço de coleta.
-- O projeto de testes (`Technical-Challenge.Test`) referencia apenas o `WebAPI` e valida componentes chaves através de suas abstrações, garantindo cobertura de comportamento e regressões.
-- Essa abordagem minimiza duplicação de lógica e mantém a separação de responsabilidades de runtime.
+- `Application` é a camada central: independente de frameworks e compartilhada por `WebAPI` e `RPA`.
+- `Infrastructure` fornece implementações concretas e integrações externas usadas pela camada de aplicação.
+- `WebAPI` e `RPA` são dois hosts distintos, evitando acoplamento de runtime.
+- O projeto de testes (`Technical-Challenge.Test`) funciona sobre `WebAPI`, garantindo cobertura de regressão sem dependências diretas extras.
 
 **Princípios aplicados:**
 
@@ -195,17 +203,24 @@ flowchart LR
 │   │   └── QuotesController.cs             ← Endpoints HTTP da API de consulta
 │   ├── Extensions/
 │   │   ├── ApplicationBuilderExtensions.cs ← Middlewares e execução das migrações
-│   │   └── ServiceCollectionExtensions.cs  ← Configuração de DI, HttpClientFactory e Polly
+│   │   └── ServiceCollectionExtensions.cs  ← Configuração de DI e API
 │   ├── Dockerfile                          ← Receita multi-stage build do container
 │   ├── Program.cs                          ← Ponto de entrada e composição raiz
 │   └── appsettings.json                    ← Configurações e definições base da aplicação
+├── Technical-Challenge.RPA/
+│   ├── Dockerfile                          ← Receita multi-stage build do container de RPA
+│   ├── Program.cs                          ← Ponto de entrada do serviço de scraping
+│   └── Technical-Challenge.RPA.csproj      ← Projeto de serviço em background
 └── Technical-Challenge.Test/               ← Projeto de testes unitários (Worker e Scraper)
 ```
 
 **Separação entre os projetos:**
-O projeto não utiliza uma separação física por pastas entre "RPA" e "API" (como dois microserviços em pastas distintas), mas utiliza a **separação em camadas (.csproj)**.
+O projeto agora utiliza uma separação física clara entre o serviço de RPA (`Technical-Challenge.RPA`) e a API (`Technical-Challenge.WebAPI`).
 
-O RPA está embutido na `Application` através da classe `Worker`, dividindo os mesmos recursos do banco e entidades de domínio.
+- `Technical-Challenge.RPA` é um projeto executável em background que roda o `Worker` e faz o scraping periódico.
+- `Technical-Challenge.WebAPI` é um serviço HTTP separado que expõe os dados coletados.
+- `Technical-Challenge.Application` contém a lógica de orquestração e contratos reutilizados por ambos os hosts.
+- `Technical-Challenge.Infrastructure` fornece persistência, scraping HTTP e suporte de banco para os dois hosts.
 
 ---
 
@@ -335,7 +350,7 @@ docker exec -it postgres_db psql -U postgres -d challenge
 
 # Docker e Infraestrutura
 
-- **docker-compose.yml:** Define a orquestração multi-container. `db` utiliza a imagem Alpine do PostgreSQL 16; `api` monta o projeto .NET local expondo a porta `8080`; `worker` inicia a coleta em background com o mesmo código de aplicação, isolado da API; e `pgadmin` é configurado na porta `5050` como painel do BD.
+- **docker-compose.yml:** Define a orquestração multi-container. `db` utiliza a imagem Alpine do PostgreSQL 16; `api` monta o projeto .NET local expondo a porta `8080`; `rpa` inicia a coleta em background com o mesmo código de aplicação, isolado da API; e `pgadmin` é configurado na porta `5050` como painel do BD.
 - **Multi-stage build (Dockerfile):** Utiliza um padrão de múltiplas fases. A fase `build` possui ferramentas (SDK do .NET 8.0) para restaurar as dependências e compilar o código de todos os módulos de classe. A fase `runtime` (`aspnet:8.0`) pega apenas os binários finais gerados no publish. Isso garante que a imagem final possua menor tamanho de disco (reduz overhead) e remove vulnerabilidades e utilitários que não devem estar em produção.
 - **Volume pgdata:** Definido globalmente e atrelado ao `/var/lib/postgresql/data`. O PostgreSQL escreve as modificações nele. Esse mecanismo retém e resguarda os dados se o container morrer ou for removido.
 - **Healthcheck e Impacto no Startup:** O healthcheck atesta se o PostgreSQL aceita comandos (via `pg_isready`). Essa proteção de bloqueio impede que a Web API ou o Worker subam simultaneamente e falhem tentando criar conexões em um servidor de banco de dados inativo ou ainda em processo de warm-up.

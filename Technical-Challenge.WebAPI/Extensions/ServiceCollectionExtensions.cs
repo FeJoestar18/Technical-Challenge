@@ -102,10 +102,5 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddWorkerHostedService(this IServiceCollection services)
-    {
-        services.AddHostedService<Worker>();
-
-        return services;
-    }
 }
+
