@@ -1,9 +1,13 @@
 # Visão Geral
 
-Sistema de coleta (RPA) e consulta (API) de cotações de moedas. O Worker em background coleta dados regularmente e armazena em um banco relacional, enquanto a Web API fornece endpoints para consulta e histórico dessas cotações.
+Sistema de coleta (RPA) e consulta (API) de cotações de moedas. 
+
+O Worker em background coleta dados regularmente e armazena em um banco relacional, enquanto a Web API fornece endpoints para consulta e histórico dessas cotações.
 
 **Problema que resolve:** Permite armazenar o histórico de cotações de moedas em banco de dados local para consultas rápidas e relatórios, reduzindo chamadas repetidas e dependência de APIs externas de terceiros.
+
 **Fonte de dados utilizada:** `https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL,BTC-BRL,EUR-USD`
+
 **Stack de tecnologias:** .NET 8.0, ASP.NET Core, Entity Framework Core (Migrações), Dapper, PostgreSQL 16, Docker, Docker Compose, Polly, Npgsql.
 
 ---
@@ -82,7 +86,11 @@ flowchart LR
     WebAPI -- "SELECT<br>(Dapper)" --> DB
 ```
 
-**Fluxo de dados:** A fonte externa (AwesomeAPI) é consultada via HTTP GET pelo `Worker` (RPA), que roda em background dentro do mesmo container da API. O `Worker` usa `Dapper` para fazer um INSERT das cotações coletadas no PostgreSQL. Um cliente faz requisições HTTP para a Web API, que por sua vez utiliza o `QuoteRepository` com `Dapper` para buscar (SELECT) os dados no PostgreSQL e retorná-los como JSON.
+**Fluxo de dados:** A fonte externa (AwesomeAPI) é consultada via HTTP GET pelo `Worker` (RPA), que roda em background dentro do mesmo container da API. 
+
+O `Worker` usa `Dapper` para fazer um INSERT das cotações coletadas no PostgreSQL. 
+
+Um cliente faz requisições HTTP para a Web API, que por sua vez utiliza o `QuoteRepository` com `Dapper` para buscar (SELECT) os dados no PostgreSQL e retorná-los como JSON.
 
 **Decisões de infraestrutura:**
 - **PostgreSQL:** Banco de dados relacional robusto, ideal para séries temporais e dados transacionais (cotações financeiras).
@@ -121,7 +129,9 @@ flowchart LR
     Infrastructure -- "suporta" --> Application
 ```
 
-Neste diagrama, as setas mostram as dependências principais: `Api` consome `Application`; `Application` consome `Domain`; `Infrastructure` implementa contratos da `Application` e suporta a aplicação. Aqui o fluxo de dependências é de fora para dentro (externo -> interno), preservando a independência do núcleo de domínio.
+Neste diagrama, as setas mostram as dependências principais: `Api` consome `Application`; `Application` consome `Domain`; `Infrastructure` implementa contratos da `Application` e suporta a aplicação.
+
+ Aqui o fluxo de dependências é de fora para dentro (externo -> interno), preservando a independência do núcleo de domínio.
 
 - **Domain:** Contém as entidades puras do negócio (`CurrencyQuote`, `User`) e independe completamente de frameworks.
 - **Application:** Contém as interfaces (contratos de abstração como `IQuoteRepository` e `IScraperService`) e a orquestração do caso de uso de coleta no `Worker.cs`.
@@ -129,7 +139,9 @@ Neste diagrama, as setas mostram as dependências principais: `Api` consome `App
 - **WebAPI:** Camada de apresentação/hosting. Contém os `Controllers`, configuração do Swagger, Middlewares e Injeção de Dependências.
 
 **Comunicação entre camadas:**
-As camadas superiores dependem de abstrações, não de implementações. A camada de `WebAPI` (via `ServiceCollectionExtensions.cs`) injeta as implementações da camada `Infrastructure` para satisfazer as interfaces requisitadas por `Application` (Injeção de Dependência).
+As camadas superiores dependem de abstrações, não de implementações.
+
+ A camada de `WebAPI` (via `ServiceCollectionExtensions.cs`) injeta as implementações da camada `Infrastructure` para satisfazer as interfaces requisitadas por `Application` (Injeção de Dependência).
 
 **Princípios SOLID aplicados:**
 - **SRP (Princípio da Responsabilidade Única):** O `HttpScraperService` se encarrega exclusivamente do scraping, enquanto o `QuoteRepository` lida unicamente com consultas no banco.
@@ -175,7 +187,9 @@ As camadas superiores dependem de abstrações, não de implementações. A cama
 
 
 **Separação entre os projetos:**
-O projeto não utiliza uma separação física por pastas entre "RPA" e "API" (como dois microserviços em pastas distintas), mas utiliza a **separação em camadas (.csproj)**. O RPA está embutido na `Application` através da classe `Worker`, dividindo os mesmos recursos do banco e entidades de domínio.
+O projeto não utiliza uma separação física por pastas entre "RPA" e "API" (como dois microserviços em pastas distintas), mas utiliza a **separação em camadas (.csproj)**. 
+
+O RPA está embutido na `Application` através da classe `Worker`, dividindo os mesmos recursos do banco e entidades de domínio.
 
 ---
 
