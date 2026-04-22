@@ -4,6 +4,7 @@ using Technical_Challenge.WebAPI.Extensions;
 Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
+var workerMode = args.Contains("--worker") || builder.Configuration.GetValue<bool>("WORKER_MODE");
 
 if (builder.Environment.IsDevelopment())
 {
@@ -11,13 +12,25 @@ if (builder.Environment.IsDevelopment())
 }
 
 builder.Services
-    .AddWebApiServices(builder.Configuration)
     .AddPersistenceServices(builder.Configuration)
     .AddScraperServices();
+
+if (workerMode)
+{
+    builder.Services.AddWorkerHostedService();
+}
+else
+{
+    builder.Services.AddWebApiServices(builder.Configuration);
+}
 
 var app = builder.Build();
 
 await app.InitializeDatabaseAsync();
-app.ConfigureWebApi();
+
+if (!workerMode)
+{
+    app.ConfigureWebApi();
+}
 
 app.Run();

@@ -9,8 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Technical-Challenge.Application\Technical-Challenge.Application.csproj" />
-    <ProjectReference Include="..\Technical-Challenge.Infrastructure\Technical-Challenge.Infrastructure.csproj" />
     <ProjectReference Include="..\Technical-Challenge.WebAPI\Technical-Challenge.WebAPI.csproj" />
   </ItemGroup>
 
